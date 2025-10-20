@@ -1,10 +1,10 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-from backend.sockets import socketio
-from backend.db import Base, engine
-from backend.routes.teacher import teacher_bp
-from backend.routes.student import student_bp
+from sockets import socketio
+from db import Base, engine
+from routes.teacher import teacher_bp
+from routes.student import student_bp
 import os
 
 # -------------------------------------------------
