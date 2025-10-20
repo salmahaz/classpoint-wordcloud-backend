@@ -5,6 +5,7 @@ from utils import hash_password, verify_password, generate_code
 from datetime import datetime, timedelta
 from functools import wraps
 import jwt, os
+from sockets import socketio
 
 teacher_bp = Blueprint("teacher", __name__)
 SECRET_KEY = os.getenv("JWT_SECRET", "devsecret")
