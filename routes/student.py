@@ -1,8 +1,7 @@
 from flask import Blueprint, request, jsonify
-from flask import Response
 from db import SessionLocal
-from models import Teacher, Session
-from utils import hash_password, verify_password, generate_code
+from models import Session, Response as StudentResponse  # import your DB model safely
+from sockets import socketio  # make sure to import this for broadcasting
 
 student_bp = Blueprint("student", __name__)
 
@@ -58,21 +57,34 @@ def submit_word():
             return jsonify({"success": False, "error": "session is not active"}), 403
 
         # enforce word limit per student
-        count = db.query(Response).filter_by(session_id=s.id, student_name=name).count()
+        count = (
+            db.query(StudentResponse)
+            .filter_by(session_id=s.id, student_name=name)
+            .count()
+        )
         if count >= s.word_limit:
             return jsonify({"success": False, "error": "limit reached"}), 403
 
         # save response
-        r = Response(student_name=name or "Anonymous", word=word, session_id=s.id)
+        r = StudentResponse(
+            student_name=name or "Anonymous",
+            word=word,
+            session_id=s.id,
+        )
         db.add(r)
         db.commit()
 
         # broadcast to teacher dashboard in real time
-        socketio.emit("new_word", {"word": word, "name": name or "Anonymous"}, room=code)
+        socketio.emit(
+            "new_word",
+            {"word": word, "name": name or "Anonymous"},
+            room=code,
+        )
 
         return jsonify({"success": True, "message": "word submitted successfully"})
     except Exception as e:
         db.rollback()
+        print("[ERROR]", e)
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         db.close()
