@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
-from ..db import SessionLocal
-from ..models import Session, Response
-from ..sockets import socketio
+from db import SessionLocal
+from models import Teacher, Session
+from utils import hash_password, verify_password, generate_code
 
 student_bp = Blueprint("student", __name__)
 
