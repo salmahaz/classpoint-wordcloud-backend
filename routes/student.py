@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from flask import Response
 from db import SessionLocal
 from models import Teacher, Session
 from utils import hash_password, verify_password, generate_code
