@@ -91,6 +91,15 @@ def login_teacher():
 
 
 # -------------------------------------------------
+# VERIFY TOKEN
+# -------------------------------------------------
+@teacher_bp.get("/verify-token")
+@require_auth
+def verify_token():
+    return jsonify({"success": True, "message": "Token is valid"})
+
+
+# -------------------------------------------------
 # CREATE SESSION
 # -------------------------------------------------
 @teacher_bp.post("/create-session")
