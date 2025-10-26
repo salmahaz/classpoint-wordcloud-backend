@@ -8,7 +8,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import relationship
-from .db import Base
+from db import Base
 
 # -------------------------------------------------
 # TEACHER MODEL

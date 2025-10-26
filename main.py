@@ -1,10 +1,10 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-from backend.sockets import socketio
-from backend.db import Base, engine
-from backend.routes.teacher import teacher_bp
-from backend.routes.student import student_bp
+from sockets import socketio
+from db import Base, engine
+from routes.teacher import teacher_bp
+from routes.student import student_bp
 import os
 
 # -------------------------------------------------
@@ -42,7 +42,11 @@ socketio.init_app(app, cors_allowed_origins="*")
 # -------------------------------------------------
 # DATABASE SETUP
 # -------------------------------------------------
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+    print("[DB] Tables ensured successfully")
+except Exception as e:
+    print(f"[DB] Error creating tables: {e}")
 
 # -------------------------------------------------
 # BLUEPRINT REGISTRATION
@@ -55,7 +59,10 @@ app.register_blueprint(student_bp, url_prefix="/api/student")
 # -------------------------------------------------
 @app.get("/")
 def home():
-    return jsonify({"message": "word cloud backend running with Flask + Socket.IO"}), 200
+    return jsonify({
+        "message": "Word Cloud Backend running with Flask + Socket.IO",
+        "environment": os.getenv("FLASK_ENV", "development"),
+    }), 200
 
 # -------------------------------------------------
 # MAIN ENTRY POINT
@@ -63,11 +70,15 @@ def home():
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
     env = os.getenv("FLASK_ENV", "development")
+
+    print("\n==========================================")
     print("Flask Word Cloud Backend Starting...")
     print(f"Environment: {env}")
-    print(f"Database: {os.getenv('DB_NAME')} on {os.getenv('DB_HOST')}")
+    print(f"Database URL: {os.getenv('DATABASE_URL', 'not set')}")
     print(f"JWT Secret: {'set' if os.getenv('JWT_SECRET') else 'missing!'}")
     print(f"Allowed Frontend Origins: {ALLOWED_ORIGINS}")
-    print(f"Running on http://0.0.0.0:{port}\n")
+    print(f"Running on http://0.0.0.0:{port}")
+    print("==========================================\n")
 
-    socketio.run(app, host="0.0.0.0", port=port)
+    # Allow Werkzeug for Render
+    socketio.run(app, host="0.0.0.0", port=port, allow_unsafe_werkzeug=True)
