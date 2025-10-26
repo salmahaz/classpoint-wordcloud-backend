@@ -109,10 +109,18 @@ def create_session():
     db = SessionLocal()
     try:
         code = generate_code()
+        
+        # sanitize word_limit to always be an integer
+        word_limit = data.get("word_limit", 3)
+        try:
+            word_limit = int(word_limit)
+        except (ValueError, TypeError):
+            word_limit = 3
+
         session = Session(
             code=code,
             teacher_id=request.teacher_id,
-            word_limit=data.get("word_limit", 3),
+            word_limit=word_limit,  # safe value now
             is_active=False,
         )
         db.add(session)
@@ -123,6 +131,7 @@ def create_session():
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         db.close()
+
 
 
 # -------------------------------------------------
