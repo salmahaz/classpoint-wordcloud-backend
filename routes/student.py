@@ -20,13 +20,14 @@ def check_session():
     try:
         s = db.query(Session).filter_by(code=code).first()
         if not s:
-            return jsonify({"success": False, "error": "invalid session"}), 404
+            return jsonify({"success": False, "error": "no session with this code exists"}), 404
 
-        # ensure session is active before allowing join
-        if not s.is_active:
-            return jsonify({"success": False, "error": "session is not active"}), 403
-
-        return jsonify({"success": True, "title": f"Word Cloud – {s.teacher.full_name}"})
+        # allow join even if inactive - submission will be blocked later
+        return jsonify({
+            "success": True, 
+            "title": f"Word Cloud – {s.teacher.full_name}",
+            "is_active": s.is_active
+        })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
