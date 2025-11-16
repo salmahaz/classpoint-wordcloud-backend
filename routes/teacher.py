@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from db import SessionLocal
-from models import Teacher, Session
+from models import Teacher, Session, Classroom, Student
 from utils import hash_password, verify_password, generate_code
 from datetime import datetime, timedelta
 from functools import wraps
@@ -117,9 +117,16 @@ def create_session():
         except (ValueError, TypeError):
             word_limit = 3
 
+        class_id = data.get("class_id")
+        if class_id:
+            # Verify class belongs to teacher
+            classroom = db.query(Classroom).filter_by(id=class_id, teacher_id=request.teacher_id).first()
+            if not classroom:
+                return jsonify({"success": False, "error": "class not found"}), 404
+
         session = Session(
             code=code,
-            teacher_id=request.teacher_id,
+            class_id=class_id,
             word_limit=word_limit,  # safe value now
             is_active=False,
         )
@@ -152,7 +159,7 @@ def start_session():
         session.start_time = datetime.utcnow()
         db.commit()
 
-        # 🔹 broadcast to students
+        # broadcast to students
         socketio.emit(
             "slide_image",
             {"code": session.code, "slide": slide_image},
@@ -184,6 +191,149 @@ def end_session():
         session.end_time = datetime.utcnow()
         db.commit()
         return jsonify({"success": True, "message": "session ended"})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
+
+# -------------------------------------------------
+# CLASS MANAGEMENT
+# -------------------------------------------------
+@teacher_bp.post("/classes")
+@require_auth
+def create_class():
+    data = request.get_json()
+    db = SessionLocal()
+    try:
+        if not data.get("name"):
+            return jsonify({"success": False, "error": "class name required"}), 400
+
+        classroom = Classroom(
+            name=data["name"],
+            teacher_id=request.teacher_id,
+        )
+        db.add(classroom)
+        db.commit()
+        return jsonify({"success": True, "class": {"id": classroom.id, "name": classroom.name}})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
+
+@teacher_bp.get("/classes")
+@require_auth
+def list_classes():
+    db = SessionLocal()
+    try:
+        classes = db.query(Classroom).filter_by(teacher_id=request.teacher_id).all()
+        return jsonify({
+            "success": True,
+            "classes": [
+                {
+                    "id": c.id,
+                    "name": c.name,
+                    "student_count": len(c.students),
+                }
+                for c in classes
+            ]
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
+
+@teacher_bp.delete("/classes/<int:class_id>")
+@require_auth
+def delete_class(class_id):
+    db = SessionLocal()
+    try:
+        classroom = db.query(Classroom).filter_by(id=class_id, teacher_id=request.teacher_id).first()
+        if not classroom:
+            return jsonify({"success": False, "error": "class not found"}), 404
+
+        db.delete(classroom)
+        db.commit()
+        return jsonify({"success": True, "message": "class deleted"})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
+
+# -------------------------------------------------
+# STUDENT MANAGEMENT
+# -------------------------------------------------
+@teacher_bp.post("/classes/<int:class_id>/students")
+@require_auth
+def create_student(class_id):
+    data = request.get_json()
+    db = SessionLocal()
+    try:
+        classroom = db.query(Classroom).filter_by(id=class_id, teacher_id=request.teacher_id).first()
+        if not classroom:
+            return jsonify({"success": False, "error": "class not found"}), 404
+
+        if not data.get("full_name"):
+            return jsonify({"success": False, "error": "student name required"}), 400
+
+        student = Student(
+            full_name=data["full_name"],
+            class_id=class_id,
+        )
+        db.add(student)
+        db.commit()
+        return jsonify({"success": True, "student": {"id": student.id, "full_name": student.full_name}})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
+
+@teacher_bp.get("/classes/<int:class_id>/students")
+@require_auth
+def list_students(class_id):
+    db = SessionLocal()
+    try:
+        classroom = db.query(Classroom).filter_by(id=class_id, teacher_id=request.teacher_id).first()
+        if not classroom:
+            return jsonify({"success": False, "error": "class not found"}), 404
+
+        return jsonify({
+            "success": True,
+            "students": [
+                {"id": s.id, "full_name": s.full_name}
+                for s in classroom.students
+            ]
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
+
+@teacher_bp.delete("/classes/<int:class_id>/students/<int:student_id>")
+@require_auth
+def delete_student(class_id, student_id):
+    db = SessionLocal()
+    try:
+        classroom = db.query(Classroom).filter_by(id=class_id, teacher_id=request.teacher_id).first()
+        if not classroom:
+            return jsonify({"success": False, "error": "class not found"}), 404
+
+        student = db.query(Student).filter_by(id=student_id, class_id=class_id).first()
+        if not student:
+            return jsonify({"success": False, "error": "student not found"}), 404
+
+        db.delete(student)
+        db.commit()
+        return jsonify({"success": True, "message": "student deleted"})
     except Exception as e:
         db.rollback()
         return jsonify({"success": False, "error": str(e)}), 500

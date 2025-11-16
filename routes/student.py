@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from db import SessionLocal
-from models import Session, Response as StudentResponse  # import your DB model safely
-from sockets import socketio  # make sure to import this for broadcasting
+from models import Session, Response as StudentResponse, Student, Classroom
+from sockets import socketio
 
 student_bp = Blueprint("student", __name__)
 
@@ -22,10 +22,15 @@ def check_session():
         if not s:
             return jsonify({"success": False, "error": "no session with this code exists"}), 404
 
+        # Get teacher name through classroom relationship
+        teacher_name = "Teacher"
+        if s.classroom and s.classroom.teacher:
+            teacher_name = s.classroom.teacher.full_name
+
         # allow join even if inactive - submission will be blocked later
         return jsonify({
             "success": True, 
-            "title": f"Word Cloud – {s.teacher.full_name}",
+            "title": f"Word Cloud – {teacher_name}",
             "is_active": s.is_active
         })
     except Exception as e:
@@ -57,10 +62,28 @@ def submit_word():
         if not s.is_active:
             return jsonify({"success": False, "error": "session is not active"}), 403
 
+        # Get or create student in the class
+        if not s.classroom:
+            return jsonify({"success": False, "error": "session has no associated class"}), 400
+
+        student = db.query(Student).filter_by(
+            class_id=s.classroom.id,
+            full_name=name or "Anonymous"
+        ).first()
+
+        if not student:
+            # Create student if doesn't exist
+            student = Student(
+                full_name=name or "Anonymous",
+                class_id=s.classroom.id
+            )
+            db.add(student)
+            db.flush()  # Get the student ID without committing
+
         # enforce word limit per student
         count = (
             db.query(StudentResponse)
-            .filter_by(session_id=s.id, student_name=name)
+            .filter_by(session_id=s.id, student_id=student.id)
             .count()
         )
         if count >= s.word_limit:
@@ -68,7 +91,7 @@ def submit_word():
 
         # save response
         r = StudentResponse(
-            student_name=name or "Anonymous",
+            student_id=student.id,
             word=word,
             session_id=s.id,
         )
