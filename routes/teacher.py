@@ -117,17 +117,26 @@ def create_session():
         except (ValueError, TypeError):
             word_limit = 3
 
+        # class_id is now required
         class_id = data.get("class_id")
-        if class_id:
-            # Verify class belongs to teacher
-            classroom = db.query(Classroom).filter_by(id=class_id, teacher_id=request.teacher_id).first()
-            if not classroom:
-                return jsonify({"success": False, "error": "class not found"}), 404
+        if not class_id:
+            return jsonify({"success": False, "error": "class_id is required"}), 400
+        
+        # Convert to int if it's a string
+        try:
+            class_id = int(class_id)
+        except (ValueError, TypeError):
+            return jsonify({"success": False, "error": "invalid class_id"}), 400
+        
+        # Verify class belongs to teacher
+        classroom = db.query(Classroom).filter_by(id=class_id, teacher_id=request.teacher_id).first()
+        if not classroom:
+            return jsonify({"success": False, "error": "class not found or access denied"}), 404
 
         session = Session(
             code=code,
             class_id=class_id,
-            word_limit=word_limit,  # safe value now
+            word_limit=word_limit,
             is_active=False,
         )
         db.add(session)
@@ -135,6 +144,9 @@ def create_session():
         return jsonify({"success": True, "code": code})
     except Exception as e:
         db.rollback()
+        print(f"[ERROR] Create session error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         db.close()
