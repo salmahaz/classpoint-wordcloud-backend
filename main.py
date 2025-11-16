@@ -78,6 +78,62 @@ def migrate_database():
                 import traceback
                 traceback.print_exc()
                 # Continue anyway - the app might still work if column gets added manually
+    
+    # Check if sessions table exists and if class_id column is missing
+    if 'sessions' in inspector.get_table_names():
+        columns = [col['name'] for col in inspector.get_columns('sessions')]
+        if 'class_id' not in columns:
+            print("[DB] Adding class_id column to sessions table...")
+            try:
+                with engine.begin() as conn:
+                    # Add class_id column (nullable for existing records, but new records will require it)
+                    conn.execute(text("ALTER TABLE sessions ADD COLUMN class_id INTEGER"))
+                    # Add foreign key constraint if it doesn't exist
+                    try:
+                        conn.execute(text("ALTER TABLE sessions ADD CONSTRAINT fk_sessions_class_id FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE"))
+                    except Exception as fk_err:
+                        # Foreign key might already exist or table might not exist yet
+                        print(f"[DB] Note: Could not add foreign key constraint (may already exist): {fk_err}")
+                print("[DB] Successfully added class_id column to sessions table")
+            except Exception as e:
+                print(f"[DB] Error adding class_id column: {e}")
+                import traceback
+                traceback.print_exc()
+                # Continue anyway - the app might still work if column gets added manually
+    
+    # Check if responses table exists and if student_id or session_id columns are missing
+    if 'responses' in inspector.get_table_names():
+        columns = [col['name'] for col in inspector.get_columns('responses')]
+        
+        if 'student_id' not in columns:
+            print("[DB] Adding student_id column to responses table...")
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE responses ADD COLUMN student_id INTEGER"))
+                    try:
+                        conn.execute(text("ALTER TABLE responses ADD CONSTRAINT fk_responses_student_id FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE"))
+                    except Exception as fk_err:
+                        print(f"[DB] Note: Could not add student_id foreign key constraint (may already exist): {fk_err}")
+                print("[DB] Successfully added student_id column to responses table")
+            except Exception as e:
+                print(f"[DB] Error adding student_id column: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        if 'session_id' not in columns:
+            print("[DB] Adding session_id column to responses table...")
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE responses ADD COLUMN session_id INTEGER"))
+                    try:
+                        conn.execute(text("ALTER TABLE responses ADD CONSTRAINT fk_responses_session_id FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE"))
+                    except Exception as fk_err:
+                        print(f"[DB] Note: Could not add session_id foreign key constraint (may already exist): {fk_err}")
+                print("[DB] Successfully added session_id column to responses table")
+            except Exception as e:
+                print(f"[DB] Error adding session_id column: {e}")
+                import traceback
+                traceback.print_exc()
 
 try:
     Base.metadata.create_all(bind=engine)
