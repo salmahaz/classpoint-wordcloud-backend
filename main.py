@@ -37,10 +37,17 @@ ALLOWED_ORIGINS = [
 seen = set()
 ALLOWED_ORIGINS = [x for x in ALLOWED_ORIGINS if not (x in seen or seen.add(x))]
 
+# Configure CORS with explicit methods and headers
 CORS(
     app,
-    resources={r"/api/*": {"origins": ALLOWED_ORIGINS}},
-    supports_credentials=True,
+    resources={
+        r"/api/*": {
+            "origins": ALLOWED_ORIGINS,
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True,
+        }
+    },
 )
 
 # -------------------------------------------------
@@ -77,6 +84,17 @@ def home():
     return jsonify({
         "message": "Word Cloud Backend running with Flask + Socket.IO",
         "environment": os.getenv("FLASK_ENV", "development"),
+        "allowed_origins": ALLOWED_ORIGINS,
+    }), 200
+
+# -------------------------------------------------
+# HEALTH CHECK ENDPOINT
+# -------------------------------------------------
+@app.get("/health")
+def health():
+    return jsonify({
+        "status": "healthy",
+        "allowed_origins": ALLOWED_ORIGINS,
     }), 200
 
 # -------------------------------------------------
