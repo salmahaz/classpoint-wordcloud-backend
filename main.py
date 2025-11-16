@@ -5,6 +5,8 @@ from sockets import socketio
 from db import Base, engine
 from routes.teacher import teacher_bp
 from routes.student import student_bp
+# Import models so they register with Base.metadata before create_all()
+from models import Teacher, Classroom, Student, Session, Response
 import os
 
 # -------------------------------------------------
@@ -21,12 +23,19 @@ app = Flask(__name__)
 # CORS CONFIGURATION
 # -------------------------------------------------
 # frontend URLs for both local & deployed versions
+# Support multiple URLs: comma-separated in FRONTEND_URL env var
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://127.0.0.1:5500")
+FRONTEND_URLS = [url.strip() for url in FRONTEND_URL.split(",") if url.strip()]
+
 ALLOWED_ORIGINS = [
-    FRONTEND_URL,
+    *FRONTEND_URLS,
     "http://localhost:5500",
     "http://127.0.0.1:5500",
+    # Remove duplicates while preserving order
 ]
+# Remove duplicates while preserving order
+seen = set()
+ALLOWED_ORIGINS = [x for x in ALLOWED_ORIGINS if not (x in seen or seen.add(x))]
 
 CORS(
     app,
@@ -44,9 +53,15 @@ socketio.init_app(app, cors_allowed_origins="*")
 # -------------------------------------------------
 try:
     Base.metadata.create_all(bind=engine)
-    print("[DB] Tables ensured successfully")
+    # List all tables that were created/verified
+    from sqlalchemy import inspect
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+    print(f"[DB] Tables ensured successfully: {', '.join(tables)}")
 except Exception as e:
     print(f"[DB] Error creating tables: {e}")
+    import traceback
+    traceback.print_exc()
 
 # -------------------------------------------------
 # BLUEPRINT REGISTRATION
