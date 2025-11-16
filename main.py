@@ -58,8 +58,31 @@ socketio.init_app(app, cors_allowed_origins="*")
 # -------------------------------------------------
 # DATABASE SETUP
 # -------------------------------------------------
+def migrate_database():
+    """Add missing columns to existing tables"""
+    from sqlalchemy import text, inspect
+    inspector = inspect(engine)
+    
+    # Check if students table exists and if file_number column is missing
+    if 'students' in inspector.get_table_names():
+        columns = [col['name'] for col in inspector.get_columns('students')]
+        if 'file_number' not in columns:
+            print("[DB] Adding file_number column to students table...")
+            try:
+                with engine.begin() as conn:
+                    # Add file_number column (nullable for existing records, but new records will require it)
+                    conn.execute(text("ALTER TABLE students ADD COLUMN file_number VARCHAR(50)"))
+                print("[DB] Successfully added file_number column")
+            except Exception as e:
+                print(f"[DB] Error adding file_number column: {e}")
+                import traceback
+                traceback.print_exc()
+                # Continue anyway - the app might still work if column gets added manually
+
 try:
     Base.metadata.create_all(bind=engine)
+    # Run migrations
+    migrate_database()
     # List all tables that were created/verified
     from sqlalchemy import inspect
     inspector = inspect(engine)
