@@ -105,11 +105,11 @@ def verify_token():
 @teacher_bp.post("/create-session")
 @require_auth
 def create_session():
-    data = request.get_json()
+    data = request.get_json() or {}
+    print(f"[DEBUG] Create session request data: {data}")
+    print(f"[DEBUG] Teacher ID: {request.teacher_id}")
     db = SessionLocal()
     try:
-        code = generate_code()
-        
         # sanitize word_limit to always be an integer
         word_limit = data.get("word_limit", 3)
         try:
@@ -133,6 +133,17 @@ def create_session():
         if not classroom:
             return jsonify({"success": False, "error": "class not found or access denied"}), 404
 
+        # Generate unique code (retry if duplicate)
+        max_attempts = 10
+        code = None
+        for attempt in range(max_attempts):
+            code = generate_code()
+            existing = db.query(Session).filter_by(code=code).first()
+            if not existing:
+                break
+            if attempt == max_attempts - 1:
+                return jsonify({"success": False, "error": "failed to generate unique session code"}), 500
+
         session = Session(
             code=code,
             class_id=class_id,
@@ -141,13 +152,18 @@ def create_session():
         )
         db.add(session)
         db.commit()
+        db.refresh(session)
         return jsonify({"success": True, "code": code})
     except Exception as e:
         db.rollback()
-        print(f"[ERROR] Create session error: {e}")
+        error_msg = str(e)
+        print(f"[ERROR] Create session error: {error_msg}")
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        # Return more user-friendly error message
+        if "foreign key" in error_msg.lower() or "constraint" in error_msg.lower():
+            return jsonify({"success": False, "error": "database constraint error. Please check if the class exists."}), 500
+        return jsonify({"success": False, "error": error_msg}), 500
     finally:
         db.close()
 
