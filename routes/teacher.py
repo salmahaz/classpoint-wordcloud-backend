@@ -281,14 +281,26 @@ def create_student(class_id):
 
         if not data.get("full_name"):
             return jsonify({"success": False, "error": "student name required"}), 400
+        
+        if not data.get("file_number"):
+            return jsonify({"success": False, "error": "file number required"}), 400
+
+        # Check if file number already exists in this class
+        existing = db.query(Student).filter_by(
+            class_id=class_id,
+            file_number=data.get("file_number").strip()
+        ).first()
+        if existing:
+            return jsonify({"success": False, "error": "file number already exists in this class"}), 400
 
         student = Student(
             full_name=data["full_name"],
+            file_number=data["file_number"].strip(),
             class_id=class_id,
         )
         db.add(student)
         db.commit()
-        return jsonify({"success": True, "student": {"id": student.id, "full_name": student.full_name}})
+        return jsonify({"success": True, "student": {"id": student.id, "full_name": student.full_name, "file_number": student.file_number}})
     except Exception as e:
         db.rollback()
         return jsonify({"success": False, "error": str(e)}), 500
@@ -308,7 +320,7 @@ def list_students(class_id):
         return jsonify({
             "success": True,
             "students": [
-                {"id": s.id, "full_name": s.full_name}
+                {"id": s.id, "full_name": s.full_name, "file_number": s.file_number}
                 for s in classroom.students
             ]
         })

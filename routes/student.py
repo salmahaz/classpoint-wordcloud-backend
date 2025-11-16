@@ -12,9 +12,13 @@ student_bp = Blueprint("student", __name__)
 def check_session():
     data = request.get_json() or {}
     code = (data.get("code") or "").strip().upper()
+    file_number = (data.get("file_number") or "").strip()
 
     if not code:
         return jsonify({"success": False, "error": "missing code"}), 400
+    
+    if not file_number:
+        return jsonify({"success": False, "error": "missing file number"}), 400
 
     db = SessionLocal()
     try:
@@ -22,16 +26,29 @@ def check_session():
         if not s:
             return jsonify({"success": False, "error": "no session with this code exists"}), 404
 
+        # Check if file number exists in the class associated with this session
+        if not s.classroom:
+            return jsonify({"success": False, "error": "session has no associated class"}), 400
+
+        student = db.query(Student).filter_by(
+            class_id=s.classroom.id,
+            file_number=file_number
+        ).first()
+        
+        if not student:
+            return jsonify({"success": False, "error": "file number not found in this class"}), 404
+
         # Get teacher name through classroom relationship
         teacher_name = "Teacher"
-        if s.classroom and s.classroom.teacher:
+        if s.classroom.teacher:
             teacher_name = s.classroom.teacher.full_name
 
         # allow join even if inactive - submission will be blocked later
         return jsonify({
             "success": True, 
             "title": f"Word Cloud – {teacher_name}",
-            "is_active": s.is_active
+            "is_active": s.is_active,
+            "student_name": student.full_name
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -46,11 +63,14 @@ def check_session():
 def submit_word():
     data = request.get_json() or {}
     code = (data.get("code") or "").strip().upper()
-    name = (data.get("name") or "").strip()
+    file_number = (data.get("file_number") or "").strip()
     word = (data.get("word") or "").strip()
 
     if not code or not word:
         return jsonify({"success": False, "error": "missing fields"}), 400
+    
+    if not file_number:
+        return jsonify({"success": False, "error": "missing file number"}), 400
 
     db = SessionLocal()
     try:
@@ -62,23 +82,17 @@ def submit_word():
         if not s.is_active:
             return jsonify({"success": False, "error": "session is not active"}), 403
 
-        # Get or create student in the class
+        # Get student by file number in the class
         if not s.classroom:
             return jsonify({"success": False, "error": "session has no associated class"}), 400
 
         student = db.query(Student).filter_by(
             class_id=s.classroom.id,
-            full_name=name or "Anonymous"
+            file_number=file_number
         ).first()
 
         if not student:
-            # Create student if doesn't exist
-            student = Student(
-                full_name=name or "Anonymous",
-                class_id=s.classroom.id
-            )
-            db.add(student)
-            db.flush()  # Get the student ID without committing
+            return jsonify({"success": False, "error": "file number not found in this class"}), 404
 
         # enforce word limit per student
         count = (
@@ -101,7 +115,7 @@ def submit_word():
         # broadcast to teacher dashboard in real time
         socketio.emit(
             "new_word",
-            {"word": word, "name": name or "Anonymous"},
+            {"word": word, "name": student.full_name},
             room=code,
         )
 

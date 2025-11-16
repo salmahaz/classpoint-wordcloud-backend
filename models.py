@@ -55,13 +55,14 @@ class Student(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     full_name = Column(String(100), nullable=False)
+    file_number = Column(String(50), nullable=False)
     class_id = Column(Integer, ForeignKey("classes.id", ondelete="CASCADE"))
 
     classroom = relationship("Classroom", back_populates="students")
     responses = relationship("Response", back_populates="student", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<Student(id={self.id}, name='{self.full_name}')>"
+        return f"<Student(id={self.id}, name='{self.full_name}', file_number='{self.file_number}')>"
 
 
 # -------------------------------------------------
